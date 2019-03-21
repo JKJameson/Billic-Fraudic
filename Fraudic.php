@@ -9,7 +9,6 @@ class Fraudic {
 		$ipforwardedfor = $_SERVER['X-Forwarded-For'];
 		$acceptlanguage = $_SERVER['HTTP_ACCEPT_LANGUAGE'];
 		$useragent = $_SERVER['HTTP_USER_AGENT'];
-		$sessionid = $_COOKIE['sessionid2'];
 		// has this IP address been checked before?
 		$checked = false;
 		$records = $db->q('SELECT `data` FROM `logs_fraudic` WHERE `userid` = ? AND `ipaddress` = ? LIMIT 3', $user['id'], $ipaddress);
@@ -46,8 +45,6 @@ class Fraudic {
 				'email' => hash('sha256', strtolower($user['email'])) ,
 				'password' => hash('sha256', strtolower($password)) ,
 				'phone' => $user['phonenumber'],
-				// session data
-				'sessionID' => $sessionid,
 				'user_agent' => $useragent,
 				'accept_language' => $acceptlanguage,
 				// misc
@@ -120,14 +117,6 @@ class Fraudic {
 				set_config('fraudic_action', $_POST['fraudic_action']);
 				$billic->status = 'updated';
 			}
-		}
-	}
-	function global_before_header() {
-		global $billic, $db;
-		// add $_COOKIE['sessionid2'] for MinFraud session tracking
-		if (!isset($_COOKIE['sessionid2'])) {
-			setcookie('sessionid2', microtime(true) . '-' . $_SERVER['REMOTE_ADDR'], time() + 2592000); // 30 days
-			
 		}
 	}
 	function users_submodule($array) {
