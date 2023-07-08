@@ -6,9 +6,9 @@ class Fraudic {
 	function after_login($user, $password) {
 		global $billic, $db;
 		$ipaddress = $_SERVER['REMOTE_ADDR'];
-		$ipforwardedfor = $_SERVER['X-Forwarded-For'];
-		$acceptlanguage = $_SERVER['HTTP_ACCEPT_LANGUAGE'];
-		$useragent = $_SERVER['HTTP_USER_AGENT'];
+		$ipforwardedfor = (isset($_SERVER['X-Forwarded-For'])?$_SERVER['X-Forwarded-For']:'');
+		$acceptlanguage = (isset($_SERVER['HTTP_ACCEPT_LANGUAGE'])?$_SERVER['HTTP_ACCEPT_LANGUAGE']:'');
+		$useragent = (isset($_SERVER['HTTP_USER_AGENT'])?$_SERVER['HTTP_USER_AGENT']:'');
 		// has this IP address been checked before?
 		$checked = false;
 		$records = $db->q('SELECT `data` FROM `logs_fraudic` WHERE `userid` = ? AND `ipaddress` = ? LIMIT 3', $user['id'], $ipaddress);
@@ -19,10 +19,21 @@ class Fraudic {
 				break;
 			}
 		}
-		if ($checked) {
-			return; // we do not need to check the IP again
-			
-		}
+		if ($checked) return; // we do not need to check the IP again
+		$post = array(
+			// required fields
+			'ip' => $ipaddress,
+			'cc' => $user['country'],
+			//'license_key' => get_config('fraudic_licensekey'),
+			// user data
+			'email' => hash('sha256', strtolower($user['email'])) ,
+			'password' => hash('sha256', strtolower($password)) ,
+			'phone' => $user['phonenumber'],
+			'user_agent' => $useragent,
+			'accept_language' => $acceptlanguage,
+			// misc
+			'forwardedIP' => $ipforwardedfor,
+		);
 		$options = array(
 			CURLOPT_URL => 'https://fraud.billic.com',
 			CURLOPT_RETURNTRANSFER => true,
@@ -36,20 +47,7 @@ class Fraudic {
 			CURLOPT_SSL_VERIFYHOST => true,
 			CURLOPT_SSL_VERIFYPEER => false,
 			CURLOPT_POST => true,
-			CURLOPT_POSTFIELDS => array(
-				// required fields
-				'ip' => $ipaddress,
-				'cc' => $user['country'],
-				//'license_key' => get_config('fraudic_licensekey'),
-				// user data
-				'email' => hash('sha256', strtolower($user['email'])) ,
-				'password' => hash('sha256', strtolower($password)) ,
-				'phone' => $user['phonenumber'],
-				'user_agent' => $useragent,
-				'accept_language' => $acceptlanguage,
-				// misc
-				'forwardedIP' => $ipforwardedfor,
-			) ,
+			CURLOPT_POSTFIELDS => $post,
 		);
 		$ch = curl_init();
 		curl_setopt_array($ch, $options);
@@ -144,17 +142,19 @@ class Fraudic {
 				}
 			}
 			echo '</td><td>';
-			if ($data['cc'] != $array['user']['country']) {
-				echo '<span class="label label-danger">';
-			}
-			$country = $billic->countries[$data['cc']];
-			if (empty($country)) {
-				echo $data['cc'];
-			} else {
-				echo $billic->flag_icon($data['cc']) . ' ' . $country;
-			}
-			if ($data['cc'] != $array['user']['country']) {
-				echo '</span>';
+			if (isset($data['cc'])) {
+				if ($data['cc'] != $array['user']['country']) {
+					echo '<span class="label label-danger">';
+				}
+				$country = $billic->countries[$data['cc']];
+				if (empty($country)) {
+					echo $data['cc'];
+				} else {
+					echo $billic->flag_icon($data['cc']) . ' ' . $country;
+				}
+				if ($data['cc'] != $array['user']['country']) {
+					echo '</span>';
+				}
 			}
 			echo '</td><td>';
 			if ($data['risk'] > get_config('fraudic_risk')) {
